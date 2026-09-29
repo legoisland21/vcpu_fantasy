@@ -1,5 +1,7 @@
 # vCPU documentation
 
+Just for anyone raging that I don't provide a Windows release I don't have a working Windows PC. (cross-compilation is bad too)
+
 **_vCPU is a fantasy processor that features:_**
 + 64KB of ram
 + 3 registers (A - Math, X - Memory, Y - Results/Other)
