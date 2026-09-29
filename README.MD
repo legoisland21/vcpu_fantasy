@@ -1,7 +1,5 @@
 # vCPU documentation
 
-Just for anyone raging that I don't provide a Windows release I don't have a working Windows PC. (cross-compilation is bad too)
-
 **_vCPU is a fantasy processor that features:_**
 + 64KB of ram
 + 3 registers (A - Math, X - Memory, Y - Results/Other)
@@ -81,7 +79,7 @@ This project uses:
 + HLT - Exits program with code A
 + REPM - Repeats byte value in memory, value in A, X is the memory offset, Y is the amount
 + REPW - Repeats word value in memory, value in A, X is the memory offset, Y is the amount
-+ SYSCALL - Makes a call to for ex. get a random value, A is the syscall num.
++ SYS - Makes a call to for ex. get a random value, A is the syscall num.
 
 ## Syscalls
 
@@ -91,7 +89,8 @@ This project uses:
 + 4 - Gets pressed key, returns in A
 + 5 - Checks if key is down, key in X, Y is the result
 + 6 - Prints character to screen, X and Y are the positions, value on stack is the character
-+ 7 - Prints string, X and Y are the positions, value on stack is the string pointer
++ 7 - Prints string, X and Y are the positions, value on stack is the string pointer, the end of the string has to have 0x00
++ 8 - Wait milliseconds, Ms in Y
 
 ## Memory locations
 
@@ -119,6 +118,12 @@ stx val1
 val1:
 .WORD 0xABCD, 0xDEAD, 0xBEEF
 ```
+
+For strings (`.TEXT`):
+```
+.TEXT 'Testing Testing'
+```
+**Automatically adds 0x00**
 
 ## Value types
 There are _4_ types of values:

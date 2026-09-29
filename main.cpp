@@ -4,6 +4,8 @@
 #include <deque>
 #include <fstream>
 #include <cstring>
+#include <atomic>
+#include <thread>
 
 
 #include <raylib.h>
@@ -14,7 +16,10 @@
 
 using namespace std;
 
-bool running = false;
+atomic<bool> running{false};
+atomic<int> stepReq{0};
+atomic<uint64_t> targetCps{1000};
+atomic<bool> shouldExit{false};
 
 void drawCharVram(uint8_t* memory, char ch, int startX, int startY, uint8_t color) {
     if (static_cast<unsigned char>(ch) >= 128) return;
@@ -167,7 +172,7 @@ struct CPU {
             }
         }
         else if(opcode == CRD) { A = X = Y = 0; }
-        else if(opcode == SYSCALL) {
+        else if(opcode == SYS) {
             switch(A) {
                 case 1: { // Return random value in Y
                     Y = GetRandomValue(0x0000, 0xFFFF);
@@ -207,7 +212,7 @@ struct CPU {
                     uint8_t color = 0x0F;
                     while(true) {
                         char ch = static_cast<char>(memory[textPtr]);
-                        if(ch == '$') break;
+                        if(ch == 0x00) break;
                         else if(ch == '\n') { charX = 0; charY++; }
                         else {
                             drawCharVram(memory, ch, charX*8, charY*8, color);
@@ -217,10 +222,38 @@ struct CPU {
                     }
                     break;
                 }
+                case 8: { // Ms in Y
+                    this_thread::sleep_for(chrono::milliseconds(Y));
+                    break;
+                }
             }
         }
     }
 };
+
+void cpuThreadLoop(CPU &cpu) {
+    while (!shouldExit) {
+        if (running) {
+            uint64_t cps = targetCps.load();
+
+            if (cps > 0) {
+                auto ns_per_cycle = chrono::nanoseconds(1000000000ULL / cps);
+
+                auto start_time = chrono::high_resolution_clock::now();
+
+                cpu.step();
+
+                auto elapsed = chrono::high_resolution_clock::now() - start_time;
+
+                if (elapsed < ns_per_cycle) this_thread::sleep_for(ns_per_cycle - elapsed);
+            } else cpu.step();
+
+        } else if (stepReq > 0) {
+            cpu.step();
+            stepReq--;
+        } else this_thread::sleep_for(chrono::milliseconds(1));
+    }
+}
 
 constexpr int SCALE = 8;
 
@@ -274,16 +307,22 @@ int main() {
 
     InitWindow(1024, 768, "vCPU");
     SetTargetFPS(60);
+    const char* cps = tinyfd_inputBox("Enter CPS", "Enter CPU Hz", "1000");
+    if(cps != NULL) {
+        uint64_t cpsNum = (int)strtol(cps, NULL, 0);
+        targetCps = cpsNum;
+    } else targetCps = 1000;
 
     const char* filename = tinyfd_openFileDialog("Load program :>", ".", 0, {}, "Any Files (*.*)", 0);
     if(filename != NULL) {
         if(!loadProgram(cpu, filename)) return 1;
     }
 
+    thread cpuThread(cpuThreadLoop, ref(cpu));
+
     while(!WindowShouldClose()) {
-        if(running) cpu.step();
         BeginDrawing();
-        ClearBackground(DARKGRAY);
+        ClearBackground((Color){43, 43, 43, 255});
         drawVRAM(cpu.memory);
 
         DrawRectangle(778, 20, 236, 728, BLACK);
@@ -307,7 +346,7 @@ int main() {
 
         if(IsKeyPressed(KEY_S)) {
             running = false;
-            cpu.step();
+            stepReq++;
         }
 
         if(IsKeyPressed(KEY_Q)) {
@@ -326,8 +365,9 @@ int main() {
             const char* input = tinyfd_inputBox("vCPU Debugger", "How much instructions to step (Step X): ", "10");
             if(input != NULL) {
                 int steps = atoi(input);
-                for(int i = 0; i < steps; i++) {
-                    cpu.step();
+                if (steps > 0) {
+                    running = false;
+                    stepReq += steps;
                 }
             }
         }
@@ -359,6 +399,20 @@ int main() {
         if(IsKeyPressed(KEY_P)) {
             running = !running;
         }
+
+        if(IsKeyPressed(KEY_T)) {
+            const char* input = tinyfd_inputBox("vCPU Debugger", "Enter new speed (in Hz) ", "5000");
+            if(input != NULL) {
+                uint64_t cpsNum = (int)strtol(input, NULL, 0);
+                targetCps = cpsNum;
+            }
+        }
+    }
+
+    running = false;
+    shouldExit = true;
+    if(cpuThread.joinable()) {
+        cpuThread.join();
     }
     return 0;
 }

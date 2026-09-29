@@ -35,7 +35,7 @@ OPCODES_NO_ARGS = {
     "REPM": 0x91,
     "REPW": 0x92,
     "CRD": 0x93,
-    "SYSCALL": 0xF0,
+    "SYS": 0xF0,
 }
 
 OPCODES_ARGS = {
@@ -70,6 +70,13 @@ def parseVal(val, labels):
     
     return int(val)
 
+def extractTextContent(raw_args_str):
+    raw = raw_args_str.strip()
+    if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+        raw = raw[1:-1]
+    raw = raw.encode('utf-8').decode('unicode_escape')
+    return raw
+
 def assemble(input, output):
     with open(input, "r") as f:
         lines = f.readlines()
@@ -90,6 +97,20 @@ def assemble(input, output):
             labels[labelName] = address
             continue
 
+        first_space = line.find(" ")
+        if first_space == -1:
+            mnemonic = line.upper()
+            raw_args = ""
+        else:
+            mnemonic = line[:first_space].strip().upper()
+            raw_args = line[first_space:].strip()
+
+        if mnemonic == ".TEXT":
+            text_str = extractTextContent(raw_args)
+            cleanLines.append((mnemonic, [text_str]))
+            address += len(text_str) + 1
+            continue
+
         parts = line.replace(",", " ").split()
         mnemonic = parts[0].upper()
         args = parts[1:]
@@ -107,7 +128,7 @@ def assemble(input, output):
         else:
             print(f"Unknown instruction '{mnemonic}'")
             sys.exit(1)
-
+        
     binaryData = bytearray()
 
     for mnemonic, args in cleanLines:
@@ -132,15 +153,19 @@ def assemble(input, output):
                 val = parseVal(arg, labels) & 0xFFFF
                 binaryData.append((val >> 8) & 0xFF)
                 binaryData.append(val & 0xFF)
+        elif mnemonic == ".TEXT":
+            text_str = args[0]
+            for char in text_str:
+                binaryData.append(ord(char) & 0xFF)
+            binaryData.append(0x00)
 
     with open(output, "wb") as f:
         f.write(binaryData)
 
-    print(f"Compilation completed at {len(binaryData)} bytes! Thank you for using vMASM.");
+    print(f"Compilation completed at {len(binaryData)} bytes! Thank you for using vMASM.")
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Usage: python vmasm.py program.vas out.vex")
     else:
         assemble(sys.argv[1], sys.argv[2])
-

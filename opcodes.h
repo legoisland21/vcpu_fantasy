@@ -45,7 +45,7 @@ void init_opcodes() {
     opcodes[0x91] = "REPM";
     opcodes[0x92] = "REPW";
     opcodes[0x93] = "CRD";
-    opcodes[0xF0] = "SYSCALL";
+    opcodes[0xF0] = "SYS";
 }
 
 
@@ -119,6 +119,6 @@ void init_opcodes() {
 
 #define CRD 0x93
 
-#define SYSCALL 0xF0
+#define SYS 0xF0
 
 #define VRAM_BEGIN 0xF000 // VRAM beginning
